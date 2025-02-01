@@ -2,11 +2,9 @@ Demo code and assignments for RAS-598 Space Robotics and AI will be posted here.
 
 Course website: https://deepgis.org/dreamslab/ses598/
 
-Assignment 1:
-=============
+#Assignment 1:
 
-
-    **Final Paramaters:**
+    ##Final Paramaters:
 
 
         Kp_linear = 8.05     This value gave smooth movement through the entire range
@@ -22,7 +20,7 @@ Assignment 1:
                               little to no overlap
 
 
-    **Performance Metrics and Analysis:**
+    ##Performance Metrics and Analysis:
 
 
     ![Results of sim showing the average and max cross-track error](/images/turtle_results.png)
@@ -46,7 +44,7 @@ Assignment 1:
         could use more tuning to further even out the linear velocity.
 
 
-    **Discussion of Tuning Methodology:**
+    ##Discussion of Tuning Methodology:
 
 
         My tuning method was to start by tuning Kd_angular lower and lower values to achive smooth
@@ -57,4 +55,4 @@ Assignment 1:
         0.1 untill it achived the desired reults.
 
 
-    **Challenges and Solutions**
+    ##Challenges and Solutions
