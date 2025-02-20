@@ -12,19 +12,32 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        ('share/' + package_name + '/launch',
+            glob('launch/*.launch.py')),
+        ('share/' + package_name + '/config', [
+            'config/terrain_mapping_params.yaml',
+            'config/drone_viz.rviz'
+        ]),
+        ('share/' + package_name + '/models/terrain', [
+            'models/terrain/model.config',
+            'models/terrain/model.sdf'
+        ]),
+        ('share/' + package_name + '/models/terrain/meshes', [
+            'models/terrain/meshes/artburysol175.obj',
+            'models/terrain/meshes/artburysol175.mtl'
+        ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Your Name',
     maintainer_email='your.email@example.com',
-    description='A ROS2 package for controlling PX4 drone to perform terrain mapping using ORBSLAM3',
+    description='A ROS2 package for executing spiral trajectory with PX4',
     license='Apache License 2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'terrain_mapping_controller = terrain_mapping_drone_control.terrain_mapping_controller:main',
+            'spiral_trajectory = terrain_mapping_drone_control.spiral_trajectory:main',
+            'feature_tracker = terrain_mapping_drone_control.feature_tracker:main',
+            'pose_visualizer = terrain_mapping_drone_control.pose_visualizer:main',
         ],
     },
 ) 

@@ -1,60 +1,100 @@
+#!/usr/bin/env python3
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import PathJoinSubstitution, LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    """Generate launch description for terrain mapping system."""
+    """Generate launch description for terrain mapping with camera bridge."""
     
-    # Get the path to this package's share directory
-    pkg_share = FindPackageShare(package='terrain_mapping_drone_control').find('terrain_mapping_drone_control')
+    # Get the package share directory
+    pkg_share = get_package_share_directory('terrain_mapping_drone_control')
     
-    # Path to PX4 SITL launch file
-    px4_dir = FindPackageShare(package='px4_ros_com').find('px4_ros_com')
-    px4_launch_dir = os.path.join(px4_dir, 'launch')
+    # Get paths
+    model_path = os.path.join(pkg_share, 'models')
+    config_path = os.path.join(pkg_share, 'config')
     
-    # Include PX4 SITL launch
-    px4_sitl_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(px4_launch_dir, 'px4_sitl.launch.py')
-        ),
-        launch_arguments={
-            'world': 'bishop_fault_scarp',  # Custom world for Bishop Fault Scarp
-            'verbose': 'true'
-        }.items()
+    # Set Gazebo model and resource paths
+    gz_model_path = os.path.join(pkg_share, 'models')
+    if 'GZ_SIM_MODEL_PATH' in os.environ:
+        os.environ['GZ_SIM_MODEL_PATH'] += os.pathsep + gz_model_path
+    else:
+        os.environ['GZ_SIM_MODEL_PATH'] = gz_model_path
+
+    if 'GZ_SIM_RESOURCE_PATH' in os.environ:
+        os.environ['GZ_SIM_RESOURCE_PATH'] += os.pathsep + gz_model_path
+    else:
+        os.environ['GZ_SIM_RESOURCE_PATH'] = gz_model_path
+
+    # Set initial drone pose (x y z roll pitch yaw)
+    os.environ['PX4_GZ_MODEL_POSE'] = '5 5 1.2 0 0 0'
+    
+    # Launch PX4 SITL with x500_gimbal
+    px4_sitl = ExecuteProcess(
+        cmd=['make', 'px4_sitl', 'gz_x500_gimbal'],
+        cwd='/home/jdas/PX4-Autopilot',
+        output='screen'
     )
     
-    # Launch ORBSLAM3 node
-    orbslam3_node = Node(
-        package='orbslam3_ros2',
-        executable='orbslam3_mono_node',
-        name='orbslam3_mono',
-        output='screen',
-        parameters=[{
-            'camera_config_file': os.path.join(pkg_share, 'config', 'camera_calibration.yaml'),
-            'vocabulary_file': os.path.join(pkg_share, 'config', 'ORBvoc.txt'),
-            'use_viewer': True,
-            'save_trajectory': True
-        }]
+    # Spawn the terrain model
+    spawn_terrain = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-file', os.path.join(model_path, 'terrain', 'model.sdf'),
+            '-name', 'terrain',
+            '-x', '0',
+            '-y', '0',
+            '-z', '0',     # 5 meters below ground level
+            '-R', '1.5708', # Roll (90 degrees)
+            '-P', '0',      # Pitch
+            '-Y', '1.5708'  # Yaw (90 degrees counterclockwise)
+        ],
+        output='screen'
     )
     
-    # Launch terrain mapping controller
-    controller_node = Node(
-        package='terrain_mapping_drone_control',
-        executable='terrain_mapping_controller',
-        name='terrain_mapping_controller',
-        output='screen',
-        parameters=[
-            os.path.join(pkg_share, 'config', 'terrain_mapping_params.yaml')
-        ]
+    # Bridge node for gimbal and camera topics
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='bridge',
+        arguments=[
+            # Gimbal control topics
+            '/model/x500_gimbal_0/command/gimbal_roll@std_msgs/msg/Float64@gz.msgs.Double',
+            '/model/x500_gimbal_0/command/gimbal_pitch@std_msgs/msg/Float64@gz.msgs.Double',
+            '/model/x500_gimbal_0/command/gimbal_yaw@std_msgs/msg/Float64@gz.msgs.Double',
+            # Camera topics
+            '/camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/depth_camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
+            # Removed problematic PointCloud topic
+        ],
+        remappings=[
+            ('/camera', '/drone_camera'),
+            ('/depth_camera', '/drone_depth_camera'),
+            ('/camera_info', '/drone_camera_info')
+        ],
+        output='screen'
     )
-    
-    # Create and return launch description
+
+    # Add delays to ensure proper startup sequence
+    delayed_terrain = TimerAction(
+        period=2.0,  # 2 second delay
+        actions=[spawn_terrain]
+    )
+
+    delayed_bridge = TimerAction(
+        period=5.0,  # 5 second delay
+        actions=[bridge]
+    )
+
     return LaunchDescription([
-        px4_sitl_launch,
-        orbslam3_node,
-        controller_node
-    ]) 
+        px4_sitl,
+        delayed_terrain,
+        delayed_bridge
+    ])
